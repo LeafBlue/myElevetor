@@ -1,0 +1,41 @@
+# Ignore build directory
+build/
+
+# Ignore user-specific files
+*.user
+*.user.*
+
+# Ignore generated moc files (if not in build directory)
+moc_*.cpp
+
+# Ignore qrc resource files (if not in build directory)
+qrc_*.cpp
+
+# Ignore ui forms (if you don't want to version control them separately)
+*.ui
+
+# Ignore compiled object files
+*.o
+
+# Ignore Qt Creator specific files
+*.qmlproject.user
+*.pro.user
+
+# Ignore temporary files
+*~
+
+# Ignore the shadow build directory if it's within your source tree
+shadow-build/
+
+# Ignore CMake related files, if applicable
+CMakeLists.txt.user
+CMakeFiles/
+cmake_install.cmake
+CTestTestfile.cmake
+install_manifest.txt
+compile_commands.json
+*.dir/
+
+# Ignore other common files
+.DS_Store
+Thumbs.db
