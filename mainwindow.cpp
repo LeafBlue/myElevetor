@@ -90,7 +90,7 @@ void MainWindow::setinsidebtn(QVBoxLayout *p_layout,int place)//1左2右
 
             if(stair>0){
                 btn1->setText(QString::number(stair));
-
+                btn1->setProperty("pressedState","false");
                 //为数字按钮单独设置样式
                 btn1->setStyleSheet("QPushButton { background-color: silver;color:black;font-size:20px;font-weight: bold; }"
                                     "QPushButton[pressedState = \"true\"]{background-color: yellow;color:black;font-size:20px;font-weight: bold;}"
@@ -370,7 +370,25 @@ void MainWindow::update_endstair(Elevetor &thisele)
 
 void MainWindow::add_newstair(int newstair, Elevetor &thisele,QPushButton *btn1)
 {
+    bool ispress = btn1->property("pressedState").toBool();
+    if(ispress){
+        return;
+    }
 
+    int add_result = thisele.add_stair(newstair);
+    if(add_result == 1){
+        move_ele(thisele);
+    }else if(add_result == 2){
+        if(thisele.inmove){
+            if(thisele.direct == 1 && newstair < thisele.endstair){
+                thisele.endstair = newstair;
+                update_endstair(thisele);
+            }else if(thisele.direct == 2 && newstair > thisele.endstair){
+                thisele.endstair = newstair;
+                update_endstair(thisele);
+            }
+        }
+    }
 }
 
 

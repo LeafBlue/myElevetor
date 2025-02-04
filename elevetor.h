@@ -46,7 +46,7 @@ public:
     QVector<int> *down_out;
 
 signals:
-    void send_update(Elevetor& elevetor);
+    void send_update(Elevetor& thisele);
 };
 
 #endif // ELEVETOR_H
