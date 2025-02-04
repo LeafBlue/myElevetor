@@ -3,17 +3,20 @@
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),ele_A(),ele_B()
 {
-    move_v = static_cast<int>(50/3);//假设60像素需1000毫秒
+    ele_A.up_out = ele_B.up_out = new QVector<int>();
+    ele_A.down_out = ele_B.down_out = new QVector<int>();
 
-    ele_A.endstair = 10;
-    ele_B.endstair = 8;
+
+
+    move_v = static_cast<int>(50/3);//假设60像素需1000毫秒
 
     setWindow();
     setcenter();
 
-    move_ele(ele_A);
 
-    move_ele(ele_B);
+    //接收信号
+    connect(ele_A,&Elevetor::send_update,this,&MainWindow::update_endstair);
+    connect(ele_B,&Elevetor::send_update,this,&MainWindow::update_endstair);
 }
 
 MainWindow::~MainWindow() {}
@@ -76,8 +79,29 @@ void MainWindow::setinsidebtn(QVBoxLayout *p_layout,int place)//1左2右
         for(int j = 0;j < 3; j++){
             int stair = 12 - (i * 3 + j);
             QPushButton *btn1 = new QPushButton(btn_widget);
+
+            btn1->setFixedWidth(40);
+            btn1->setFixedHeight(40);
+            layout_row->addWidget(btn1);
+
+
+            btn1->setStyleSheet("QPushButton { background-color: silver;color:black;font-size:20px;font-weight: bold; }"
+                                "QPushButton:hover { background-color: darkgrey;color:red;font-size:20px;font-weight: bold; }");
+
             if(stair>0){
                 btn1->setText(QString::number(stair));
+
+                //为数字按钮单独设置样式
+                btn1->setStyleSheet("QPushButton { background-color: silver;color:black;font-size:20px;font-weight: bold; }"
+                                    "QPushButton[pressedState = \"true\"]{background-color: yellow;color:black;font-size:20px;font-weight: bold;}"
+                                    "QPushButton[pressedState = \"false\"]{background-color: silver;color:black;font-size:20px;font-weight: bold;}"
+                                    "QPushButton:hover { background-color: darkgrey;color:red;font-size:20px;font-weight: bold; }");
+
+                if(place == 1){
+                    ele_A.btn_map.insert(stair,btn1);
+                }else{
+                    ele_B.btn_map.insert(stair,btn1);
+                }
             }else if(stair == 0){
                 btn1->setText(QObject::tr(">|<"));
                 connect(btn1,&QPushButton::clicked,[place,this](){
@@ -101,13 +125,7 @@ void MainWindow::setinsidebtn(QVBoxLayout *p_layout,int place)//1左2右
                 });
             }
 
-            btn1->setFixedWidth(40);
-            btn1->setFixedHeight(40);
-            layout_row->addWidget(btn1);
 
-
-            btn1->setStyleSheet("QPushButton { background-color: silver;color:black;font-size:20px;font-weight: bold; }"
-                                "QPushButton:hover { background-color: darkgrey;color:red;font-size:20px;font-weight: bold; }");
 
             //验证按钮功能
             /*
@@ -237,8 +255,12 @@ void MainWindow::opendoor(Elevetor &thisele)
     QParallelAnimationGroup *group_anime = new QParallelAnimationGroup(this);
     group_anime->addAnimation(anim_left);
     group_anime->addAnimation(anim_right);
+
+    connect(group_anime,&QParallelAnimationGroup::finished,[&thisele](){
+        thisele.isopen_door = true;
+    });
     group_anime->start();
-    thisele.isopen_door = true;
+
 
 }
 
@@ -308,6 +330,47 @@ void MainWindow::move_ele(Elevetor &thisele)
     thisele.anime->start();
     //启动定时器，每200毫秒更新一次楼层
     thisele.checktime.start();
+}
+
+//调用此函数时，要默认动画是开始状态
+void MainWindow::update_endstair(Elevetor &thisele)
+{
+    if(!thisele.inmove){
+        return;
+    }
+    QPoint newstart = thisele.ele->pos();
+    int end_y  = (12 - thisele.endstair) * 60;
+    int move_y = abs(newstart.y() - end_y);
+
+
+    if(thisele.anime&&thisele.anime!=nullptr){
+        //先断开连接，再执行stop，防止先执行stop触发原connect
+        disconnect(thisele.anime,&QPropertyAnimation::finished,nullptr,nullptr);
+        thisele.anime->stop();
+        thisele.anime->deleteLater();
+        thisele.anime = nullptr;
+    }
+
+    thisele.anime = new QPropertyAnimation(thisele.ele,"pos");
+    //move_v 每像素移动所需时间
+    thisele.anime->setDuration(move_v * move_y);
+    thisele.anime->setStartValue(newstart);
+    QPoint endpoint(newstart.x(),end_y);
+    thisele.anime->setEndValue(endpoint);
+
+    connect(thisele.anime,&QPropertyAnimation::finished,[&thisele](){
+        thisele.anime->deleteLater();
+        thisele.checktime.stop();
+        thisele.nowstair = thisele.endstair;
+        thisele.inmove = false;
+    });
+
+    thisele.anime->start();
+}
+
+void MainWindow::add_newstair(int newstair, Elevetor &thisele,QPushButton *btn1)
+{
+
 }
 
 

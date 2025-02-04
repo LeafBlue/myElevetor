@@ -34,6 +34,9 @@ public:
     void opendoor(Elevetor &thisele);
     void closedoor(Elevetor &thisele);
     void move_ele(Elevetor &thisele);
+    void update_endstair(Elevetor &thisele);
+
+    void add_newstair(int newstair,Elevetor &thisele,QPushButton *btn1);
 
 private:
 
