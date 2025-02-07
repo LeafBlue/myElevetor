@@ -16,14 +16,14 @@ set(PROJECT_SOURCES
         main.cpp
         mainwindow.cpp
         mainwindow.h
+        elevetor.h
+        elevetor.cpp
 )
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
     qt_add_executable(myElevetor
         MANUAL_FINALIZATION
         ${PROJECT_SOURCES}
-        elevetor.h
-        elevetor.cpp
     )
 # Define target properties for Android with Qt 6 as:
 #    set_property(TARGET myElevetor APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR

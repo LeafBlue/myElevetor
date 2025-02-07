@@ -1,66 +1,58 @@
 #include "elevetor.h"
 
-Elevetor::Elevetor() {
+Elevetor::~Elevetor()
+{
+    delete ele;
+    delete anime;
+}
+Elevetor::Elevetor(QObject *parent)
+    : QObject(parent) {
+
+    //有三个容器不需要初始化
 
     ele = nullptr;
     nowstair = 1;
     endstair = 1;
     direct = 0;//0不动1上2下
-    inmove = false;
-    isopen_door = false;
-    isupdate = false;
+    status = 1;//1，静止，2，暂停中，3，运行动画中，4，开门动画中，5关门动画中
+
     anime = nullptr;
 
     //先设为nullptr
     up_out = nullptr;
     down_out = nullptr;
 
+    outbtn_up = nullptr;
+    outbtn_down = nullptr;
+
     checktime.setInterval(200);
 
-    //变量没有封装，所以不需要提供额外的启动定时器等函数
+    //变量没有封装为private，所以不需要提供额外的启动定时器等函数
     connect(&checktime,&QTimer::timeout,this,&Elevetor::checkCurrentFloor);
 }
 
+/*
+定时器
+*/
 void Elevetor::checkCurrentFloor()
 {
     QPoint nowpos = ele->pos();
     //这nowpos是从顶部算的，导致电梯顶部一进2楼就变成了2楼，但我们要的是电梯底部还在1楼范围时应当算1楼
-    nowstair = 11 - (nowpos.y()/60);
-
+    if(nowpos.y() % 60 == 0){
+        nowstair = 12 - (nowpos.y()/60);
+    }else{
+        nowstair = 11 - (nowpos.y()/60);
+    }
     //检查当前路径上有无需要停下的地方，此函数只会在运行时产生
-
-    //这里发射的信号要么是2，要么就是0，不可能出现1，因为1是出现在电梯停止状态的
-    //所以get_out返回1的情况要在“mainwindow按下按钮”时触发，届时返回值根据add_stair返回情况决定（但它已经不用这里处理了）。
-    if(get_out() == 2){
+    if(checkout() == 1){
         emit send_update(*this);
     }
 }
-
-//检查当前路径上有无需要停下的地方（处理外部请求）
-//返回值：0，什么都不做，1，立即执行运行操作，2，计算是否要修改目的地
-int Elevetor::get_out()
+//------------------------------------------------------------------------外部请求相关数组 开始------------------------------------------------------------------------
+//实时检查外部请求，这个函数用在运行时的定时器中，所以需要尽可能简单
+int Elevetor::checkout()
 {
-    if(direct == 0){
-        if(down_out->size()>0 && nowstair > down_out->at(down_out->size() - 1)){
-            direct = direct + 2;
-            return add_stair(down_out->at(down_out->size() - 1));
-        }
-        if(up_out->size()>0 && nowstair < up_out->at(0)){
-            direct = direct + 1;
-            return add_stair(up_out->at(0));
-        }
-        if(direct == 3){//说明满足以上两种情况，需要作出比较来选择目的地
-            if((nowstair - down_out->at(down_out->size() - 1)) > (up_out->at(0) - nowstair)){
-                direct = 1;
-                return add_stair(up_out->at(0));
-            }else{
-                direct = 2;
-                return add_stair(down_out->at(down_out->size() - 1));
-            }
-        }
-        return 0;
-    }
-    else if(direct == 1){
+    if(direct == 1){
         if(up_out->size()>0){
             //检查是否存在一个值等于当前楼层+1，如果存在立刻添加并修改目的地
             if(up_out->contains(nowstair + 1)){
@@ -71,71 +63,135 @@ int Elevetor::get_out()
                     );
 
                 action_list.push_back(nowstair + 1);
+                std::sort(action_list.begin(),action_list.end());
                 endstair = nowstair + 1;
-                return 2;
+                return 1;
             }
         }
-    }
-    else if(direct == 2){
+    }else if(direct == 2){
         if(down_out->size()>0){
-            //检查是否存在一个值等于当前楼层+1，如果存在立刻添加并修改目的地
+            //检查是否存在一个值等于当前楼层-1，如果存在立刻添加并修改目的地
             if(down_out->contains(nowstair - 1)){
-
                 down_out->erase(
                     std::remove(down_out->begin(),down_out->end(),nowstair - 1),
                     down_out->end()
                     );
                 action_list.push_back(nowstair - 1);
+                std::sort(action_list.begin(),action_list.end());
                 endstair = nowstair - 1;
-                return 2;
+                return 1;
             }
         }
     }
     return 0;
 }
 
-//添加一个数据在外部电梯
-int Elevetor::add_out(int newstair,int direct_)
+//在电梯进入静止状态后，对外部请求进行检查，查看有没有适合自己处理的请求
+//用锁锁死，防止两个对象同时处理
+int Elevetor::stop_checkout()
 {
+    if(up_out->size() > 0 && down_out->size() > 0){
+        if(abs(up_out->at(0) - nowstair) > abs(down_out->at(0) - nowstair)){
+            //处理向下请求
+            endstair = down_out->at(0);
+            out_to_inside(down_out->at(0),2);
+            return 1;
+        }else{
+            endstair = up_out->at(0);
+            out_to_inside(up_out->at(0),2);
+            return 1;
+        }
+    }
+    else if(up_out->size() > 0){
+        endstair = up_out->at(0);
+        out_to_inside(up_out->at(0),1);
+        return 1;
+    }else if(down_out->size() > 0){
+        endstair = down_out->at(0);
+        out_to_inside(down_out->at(0),2);
+        return 1;
+    }
+    return 0;
+}
+
+//当外部数组元素可以作为目标值时，将其设为endstair，并添加入内部数组
+//此函数涉及到具体对象
+//操作此函数时，电梯有可能在运行，有可能不在运行
+//direct_ 首次出现此参数，这个参数和成员变量direct不一样，它表示的是当前传入的请求是向上还是向下
+int Elevetor::out_to_inside(int newstair,int direct_)
+{
+    endstair = newstair;
     if(direct_ == 1){
-        up_out->push_back(newstair);
-        std::sort(up_out->begin(),up_out->end());
-        if(up_out->size() > 0){
-            return get_out();
-        }
+        up_out->erase(
+            std::remove(up_out->begin(),up_out->end(),newstair),
+            up_out->end()
+            );
+        action_list.push_back(newstair);
+        std::sort(action_list.begin(),action_list.end());
     }else{
-        down_out->push_back(newstair);
-        std::sort(down_out->begin(),down_out->end());
-        if(down_out->size() > 0){
-            return get_out();
-        }
+        down_out->erase(
+            std::remove(down_out->begin(),down_out->end(),newstair),
+            down_out->end()
+            );
+        action_list.push_back(newstair);
+        std::sort(action_list.begin(),action_list.end());
+    }
+    if(status == 3){
+        //需要修改目的地
+        return 2;
+    }else if(status == 1){
+        //无需修改目的地，但需要启动去寻找目标
+        return 1;
+    }else{
+        //通常不会出现此情况
+        return 0;
     }
 }
 
-/*
-电梯的思路：
+//添加一个数据到外部数组
+//此函数只会操作共享数据，因此无所谓哪个对象调用
+//当添加的数据返回为1时，证明当前添加入了一个新的，很可能电梯未在运行，需结合电梯状态进行分配
+//这里考虑不对内部数据进行排序，以得到第一个是最先插入的数据
+int Elevetor::add_out(int newstair,int direct_)
+{
+    size_t ask_size = 0;
+    if(direct_ == 1){
+        up_out->push_back(newstair);
+        //std::sort(up_out->begin(),up_out->end());
+        return up_out->size();
+    }else{
+        down_out->push_back(newstair);
+        //std::sort(down_out->begin(),down_out->end());
+        return down_out->size();
+    }
+    return 0;
+}
 
-电梯存在内部请求和外部请求。内部请求指的是在电梯里按数字，外部请求指的是在电梯外按上下按钮。
+//删除外部数组的一个数据
+int Elevetor::del_out(int newstair, int direct_)
+{
+    if(direct_ == direct){
+        if(direct_ == 1){
+            up_out->erase(
+                std::remove(up_out->begin(),up_out->end(),newstair),
+                up_out->end()
+                );
+            return 1;
+        }else{
+            down_out->erase(
+                std::remove(down_out->begin(),down_out->end(),newstair),
+                down_out->end()
+                );
+            return 1;
+        }
+    }
+    return 0;
+}
+//------------------------------------------------------------------------外部请求相关数组 结束------------------------------------------------------------------------
 
-当外部请求按下时，检查哪一台电梯可以接，接的标准是“停顿or正在朝当前方向运行”，如果都不能接（都朝着反方向运行），则挂起请求，保留在“外部等待库”（这里不对，外部等待库不应该直接添加）
-如果哪一台电梯可以接，立刻将此请求分配到对应的“电梯库”，并计算是否要修改目的地
 
-当电梯内部按下请求（这里要考虑两台电梯都按照此逻辑执行），
-检查当前是否顺路，如果顺路加入当前电梯的“执行库”， 否则加入当前电梯的“等待库”。当执行库添加成功，立刻计算是否要修改目的地。
+//------------------------------------------------------------------------内部请求相关数组 开始------------------------------------------------------------------------
 
-当电梯内部按下已按下的请求，发出删除请求，此时检查外面按钮是否亮起，作为是否删除数组中数据的标志
-如果当前目标就是要删除的请求，则无视此删除操作，这样便避免了部分冲突
-这里的删除不要和电梯到达目的地的删除操作一起使用
-
-当电梯内部不存在任何请求时，一旦接收到第一个请求，立刻开始运行。
-当电梯处理完毕执行库，理论上，“等待库”所有的数字应当都在电梯当前位置的其中一个方向，否则应该在电梯运行时处理
-但是这里还需要考虑“外部等待库”，理论上，外部等待库应该也在另一个方向（不确定），否则应该在电梯运行时处理
-
-当电梯执行库减少一个数据时，应该执行删除操作，当删除完毕时，将外部等待库和等待库添加入当前电梯执行库（这里不对，外部等待库不应该直接添加）
-
-当电梯执行库处理完毕时，电梯可能正在开门关门，此时若是相对等待库的另一方向发出请求，是否该先响应它们？理论上不该，因为相对于等待库，它们都是后来的
-
-*/
 //假设此函数用来响应电梯内部操作
 //返回值：0，什么都不做，1，立即执行运行操作，2，计算是否要修改目的地
 //理论上不应该在这里接收外部请求
@@ -151,8 +207,12 @@ int Elevetor::add_stair(int newstair){
             }*/
             action_list.push_back(newstair);
             std::sort(action_list.begin(),action_list.end());
-
-            return 2;
+            //由于direct是1或者2，这里不可能存在status=1
+            if(status == 3){
+                return 2;
+            }else{
+                return 0;//不操作，等待电梯自己关门处理
+            }
         }else{
             //这里就不排序了，没必要
             wait_list.push_back(newstair);
@@ -162,13 +222,16 @@ int Elevetor::add_stair(int newstair){
         //电梯没有行动列表
         action_list.push_back(newstair);
         endstair = newstair;
-        if(endstair > nowstair){
-            direct = 1;
-        }else{
-            direct = 2;
+        if(status == 1){
+            if(endstair > nowstair){
+                direct = 1;
+            }else{
+                direct = 2;
+            }
+            return 1;
         }
-        return 1;
     }
+    return 0;
 }
 
 //取消用的函数，默认只删除一个值，这个取消只能在电梯内部操作，所以检查当前两个数组即可
@@ -176,7 +239,7 @@ int Elevetor::add_stair(int newstair){
 //1,取消成功，2，取消失败
 int Elevetor::cancel_stair(int this_stair)
 {
-    if(endstair == this_stair){
+    if(endstair == this_stair&&status == 3){
         //拒绝取消
         return 2;
     }
@@ -210,9 +273,11 @@ int Elevetor::get_next_end()
 {
     if(action_list.size()>0){
         if(nowstair < action_list[0]){
+            endstair = action_list[0];
             return action_list[0];
         }
         else if(nowstair > action_list[action_list.size() - 1]){
+            endstair = action_list[action_list.size() - 1];
             return action_list[action_list.size() - 1];
         }
     }
@@ -220,7 +285,7 @@ int Elevetor::get_next_end()
 }
 
 //通常这个函数在action全部执行完毕后进行如此操作
-//执行完这个函数应当立即检查“外部等待库”
+//需要注意的是，执行完这个函数可能导致一直在等待的外部等待库无人处理
 int Elevetor::wait_to_action()
 {
     action_list.swap(wait_list);
@@ -242,7 +307,7 @@ int Elevetor::wait_to_action()
     }
 }
 
-
+//------------------------------------------------------------------------内部请求相关数组 结束------------------------------------------------------------------------
 
 
 

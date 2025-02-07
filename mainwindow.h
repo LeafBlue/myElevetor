@@ -16,6 +16,7 @@
 #include<cmath>
 
 
+
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
@@ -37,9 +38,13 @@ public:
 
 
     void add_newstair(int newstair,Elevetor &thisele,QPushButton *btn1);
+    void arrive_stair(Elevetor &thisele);
+    void after_closedoor(Elevetor &thisele);
+
+    void add_outstair(int newstair,QPushButton *btn1,int direct_);
 
 public slots:
-    void update_endstair(Elevetor &thisele);
+    void update_endstair(Elevetor& thisele);
 private:
 
 
